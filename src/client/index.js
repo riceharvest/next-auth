@@ -1,3 +1,5 @@
+"use client"
+
 // Note about signIn() and signOut() methods:
 //
 // On signIn() and signOut() we pass 'json: true' to request a response in JSON
@@ -48,11 +50,21 @@ const __NEXTAUTH = {
 
 const logger = proxyLogger(_logger, __NEXTAUTH.basePath)
 
-const broadcast = BroadcastChannel()
+let broadcast = null
 
-// Add event listners on load
+function _getBroadcast() {
+  if (broadcast === null) {
+    broadcast = BroadcastChannel()
+  }
+  return broadcast
+}
+
+// Add event listeners on load
 if (typeof window !== "undefined" && !__NEXTAUTH._eventListenersAdded) {
   __NEXTAUTH._eventListenersAdded = true
+
+  const _broadcast = _getBroadcast()
+
   // Listen for storage events and update session if event fired from
   // another window (but suppress firing another event to avoid a loop)
   // Fetch new session data but tell it to not to fire another event to
@@ -62,7 +74,7 @@ if (typeof window !== "undefined" && !__NEXTAUTH._eventListenersAdded) {
   // on how the session object is being used in the client; it is
   // more robust to have each window/tab fetch it's own copy of the
   // session object rather than share it across instances.
-  broadcast.receive(() => __NEXTAUTH._getSession({ event: "storage" }))
+  _broadcast.receive(() => __NEXTAUTH._getSession({ event: "storage" }))
 
   // Listen for document visibility change events and
   // if visibility of the document changes, re-fetch the session.
@@ -161,7 +173,7 @@ function _useSessionHook(session) {
 export async function getSession(ctx) {
   const session = await _fetchData("session", ctx)
   if (ctx?.triggerEvent ?? true) {
-    broadcast.post({ event: "session", data: { trigger: "getSession" } })
+    _getBroadcast().post({ event: "session", data: { trigger: "getSession" } })
   }
   return session
 }
@@ -253,7 +265,7 @@ export async function signOut(options = {}) {
   }
   const res = await fetch(`${baseUrl}/signout`, fetchOptions)
   const data = await res.json()
-  broadcast.post({ event: "session", data: { trigger: "signout" } })
+  _getBroadcast().post({ event: "session", data: { trigger: "signout" } })
 
   if (redirect) {
     const url = data.url ?? callbackUrl
